@@ -1,0 +1,257 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+---
+title: "heart disease prediction"
+output: html document
+
+```{r}
+library(dplyr) # library for data manipulation
+library(ggplot2) # Used for creating visualization plots 
+```
+
+```{r}
+df<-read.csv("C:/Users/ankus/Desktop/heart.csv")
+```
+```{r}
+df
+```
+
+
+```{r}
+head(df)
+```
+
+
+```{r}
+tail(df)
+```
+
+
+```{r}
+colnames(df)
+```
+
+
+```{r}
+names(df)[1]<-"age"
+
+colnames(df)
+```
+```{r}
+dim(df)
+```
+```{r}
+summary(df)
+```
+
+
+```{r}
+library(naniar) #package to plot the missing values
+library(ggplot2)
+gg_miss_var(df) + labs(y = "Look at all the missing ones")
+
+```
+```{r}
+sort(table(df$target), decreasing = TRUE)
+```
+```{r}
+library(corrplot) #package to plot the correlation matrix
+corr<-cor(df)
+corrplot(corr,method="color")
+```
+
+
+```{r}
+library(caret) #package to create data partitioning
+ 
+index = createDataPartition(df$target, p = 0.70, list = FALSE)
+train = df[index, ]
+test = df[-index, ]
+```
+
+```{r}
+dim(df)
+dim(train)
+dim(test)
+```
+
+
+```{r}
+x_train=train[,,-1]
+y_train=train[,ncol(df)]
+x_test=test[,,-1]
+y_test=test[,ncol(df)]
+```
+
+
+```{r}
+library(caret)
+```
+```{r}
+set.seed(120)
+library(class) #this package contains knn model function
+k=1:30
+err_k = rep(x = 0, times = length(k))
+
+calc_class_err = function(actual, predicted) {
+  mean(actual!=predicted)
+}
+
+for (i in seq_along(k)){
+  pred=knn(train=(train),test=(test),cl=y_train,i)
+  actual=y_test
+  err_k[i] = calc_class_err(actual, pred)
+}
+
+plot(err_k, type = "o",col="blue",  xlab = "k, number of neighbors", ylab = "classification error",main = "(Test) Error Rate vs Neighbors")
+
+print(min(err_k))
+x<-which(err_k == min(err_k))
+print(x)
+pred=knn(train=scale(x_train),test=scale(x_test),cl=y_train,x)
+pred_knn=pred
+```
+
+
+```{r}
+cm = confusionMatrix(table(actual = y_test,predicted = pred))
+cm$table
+cm$overall["Accuracy"]
+c(cm$byClass["Sensitivity"],cm$byClass["Specificity"])
+```
+
+
+```{r}
+library(class)
+set.seed(120)
+
+k=1:30
+err_k = rep(x = 0, times = length(k))
+
+calc_class_err = function(actual, predicted) {
+  mean(actual!=predicted)
+}
+
+for (i in seq_along(k)){
+  pred=knn(train=scale(train),test=scale(test),cl=y_train,i)
+  actual=y_test
+  err_k[i] = calc_class_err(actual, pred)
+}
+plot(err_k, type = "o",col="blue", xlab = "k, number of neighbors", ylab = "classification error", main = "(Test) Error Rate vs Neighbors")
+
+print(min(err_k))
+x<-which(err_k == min(err_k))
+print(x)
+pred=knn(train=scale(x_train),test=scale(x_test),cl=y_train,x)
+
+
+```
+
+
+```{r}
+cm = confusionMatrix(table(actual = y_test,predicted = pred))
+cm$table
+cm$overall["Accuracy"]
+c(cm$byClass["Sensitivity"],cm$byClass["Specificity"])
+```
+
+
+```{r}
+library(ISLR)
+set.seed(120)
+
+glm.fit <- glm(target ~., data =train, family = binomial)
+glm.probs <- predict(glm.fit,newdata = test,type = "response")
+pred <- ifelse(glm.probs > 0.5,1,0)
+pred_logistic=pred
+```
+
+
+```{r}
+cm = confusionMatrix(table(actual = y_test,predicted = pred))
+cm$table
+cm$overall["Accuracy"]
+c(cm$byClass["Sensitivity"],cm$byClass["Specificity"])
+```
+
+
+```{r}
+library(e1071) #this package contains the naive bayes function
+set.seed(120)
+
+NB <- naiveBayes(target ~age+sex+cp+trestbps+chol+fbs+restecg+thalach+exang+oldpeak+slope+ca+thal, data = train)
+pred <- predict(NB, newdata = test)
+pred_nb=pred
+```
+```{r}
+cm = confusionMatrix(table(actual = y_test,predicted = pred))
+cm$table
+cm$overall["Accuracy"]
+c(cm$byClass["Sensitivity"],cm$byClass["Specificity"])
+```
+```{r}
+library(rpart) # this package containes the decisition tree classifier
+library(rpart.plot) #this is used to plot the deision tree
+set.seed(120)
+
+dc<-rpart(target ~age+sex+cp+trestbps+chol+fbs+restecg+thalach+exang+oldpeak+slope+ca+thal, data = train,method="class")
+pred<-predict(dc,newdata=test,type="class")
+pred_dc=pred
+rpart.plot(dc)
+```
+```{r}
+cm = confusionMatrix(table(actual = y_test,predicted = pred))
+cm$table
+cm$overall["Accuracy"]
+c(cm$byClass["Sensitivity"],cm$byClass["Specificity"])
+```
+```{r}
+library(pROC) #this package is used to plot the roc curve
+ROC_knn <- roc(actual, factor(pred_knn,ordered=TRUE))
+ROC_logistic <- roc(actual, pred_logistic)
+ROC_nb <- roc(actual, factor(pred_nb,ordered=TRUE))
+ROC_dc <- roc(actual, factor(pred_dc,ordered=TRUE))
+ROC_knn_auc <- auc(ROC_knn)
+ROC_logistic_auc <- auc(ROC_logistic)
+ROC_nb_auc <- auc(ROC_nb)
+ROC_dc_auc <- auc(ROC_dc)
+# plot ROC curves
+plot(ROC_knn, col = "green", main = "ROC For 
+    
+    k-nearest neibours (GREEN), 
+     Logistic Regression (RED), 
+     naive bayes classifier (blue), 
+     decision tree classifier (yellow)")
+lines(ROC_logistic, col = "red")
+lines(ROC_nb, col = "blue")
+lines(ROC_dc, col = "yellow")
+# print the performance of each model
+
+```
+```{r}
+paste("Accuracy % of k nearest neigbours: ", mean(actual == pred_knn))
+paste("Accuracy % of logistic regression: ", mean(actual==pred_logistic))
+paste("Accuracy % of naive bayes classifier: ", mean(actual==pred_nb))
+paste("Accuracy % of decision tree classifier: ", mean(actual==pred_dc))
+
+paste("Area under curve of k nearest neigbours: ", ROC_knn_auc)
+paste("Area under curve of logistic regression: ", ROC_logistic_auc)
+paste("Area under curve of naive bayes classifier: ", ROC_nb_auc)
+paste("Area under curve of decision tree classifier: ", ROC_dc_auc)
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
